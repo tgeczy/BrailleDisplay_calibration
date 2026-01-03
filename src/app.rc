@@ -1,0 +1,38 @@
+#include "resource.h"
+#include <windows.h>
+
+IDD_MAIN DIALOGEX 0, 0, 360, 280
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Braille Display Calibration Tool"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "Before you begin: set your Braille grade and translation table to Computer Braille. For clean calibration, turn off the braille cursor and selection dots (7 and 8) in your screen reader if possible.", -1, 7, 7, 346, 26
+
+    GROUPBOX "Settings", -1, 7, 36, 346, 70
+    LTEXT "Columns:", -1, 14, 50, 45, 12
+    EDITTEXT IDC_COLUMNS, 60, 48, 40, 14, ES_NUMBER | WS_TABSTOP
+
+    LTEXT "Rows:", -1, 110, 50, 30, 12
+    EDITTEXT IDC_ROWS, 145, 48, 40, 14, ES_NUMBER | WS_TABSTOP
+
+    LTEXT "Interval (ms):", -1, 195, 50, 60, 12
+    EDITTEXT IDC_INTERVAL, 260, 48, 50, 14, ES_NUMBER | WS_TABSTOP
+
+    LTEXT "Mode:", -1, 14, 72, 30, 12
+    COMBOBOX IDC_MODE, 60, 70, 250, 80, CBS_DROPDOWNLIST | WS_TABSTOP
+
+    CONTROL "Loop", IDC_LOOP, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 90, 60, 12
+    CONTROL "Blink whole line", IDC_WHOLELINE, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 80, 90, 120, 12
+
+    PUSHBUTTON "&Start", IDC_START, 250, 88, 50, 14
+    PUSHBUTTON "S&top", IDC_STOP, 305, 88, 48, 14
+
+    GROUPBOX "Calibration output", -1, 7, 112, 346, 135
+    EDITTEXT IDC_OUTPUT, 14, 126, 332, 114,
+        ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
+        WS_VSCROLL | WS_TABSTOP
+
+    LTEXT "Status: Idle", IDC_STATUS, 7, 252, 340, 12
+
+    DEFPUSHBUTTON "&Close", IDCANCEL, 290, 250, 63, 14
+END
