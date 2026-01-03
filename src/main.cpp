@@ -32,6 +32,8 @@ enum class Mode : int {
     Dots3678  = 14  // mask 0xE4
 };
 
+static std::wstring ModeLabel(Mode m);
+
 struct AppState {
     HWND dlg = nullptr;
     HWND output = nullptr;
@@ -44,6 +46,7 @@ struct AppState {
     WNDPROC oldOutputProc = nullptr;
 
     bool running = false;
+    bool paused = false;
     UINT_PTR timerId = 0;
 
     // Optional: stop hotkey while running (S).
@@ -327,6 +330,7 @@ static void StopCalibration(HWND dlg) {
     UnregisterStopHotkey(dlg);
 
     g.running = false;
+    g.paused = false;
     EnableRunningUi(dlg, false);
 
     // Blank output
@@ -336,7 +340,55 @@ static void StopCalibration(HWND dlg) {
     HWND modeCombo = GetDlgItem(dlg, IDC_MODE);
     if (modeCombo) SetFocus(modeCombo);
 
-    SetStatus(L"Status: Idle. (Esc exits when idle. While running: Esc or S stops.)");
+    SetStatus(L"Status: Idle. (Esc exits when idle. While running: P/Enter pauses; Esc or S stops.)");
+}
+
+
+static void TogglePause(HWND dlg) {
+    if (!g.running) return;
+
+    if (!g.paused) {
+        // Pause
+        g.paused = true;
+
+        if (g.timerId) {
+            KillTimer(dlg, g.timerId);
+            g.timerId = 0;
+        }
+
+        std::wstring status = L"Status: Paused. ";
+        status += ModeLabel(g.mode);
+        status += L". ";
+        status += FormatCounts(g.cols, g.rows);
+        status += L" Resume: P or Enter. Stop: Esc or S.";
+        SetStatus(status);
+    } else {
+        // Resume
+        g.paused = false;
+
+        if (!g.timerId) {
+            g.timerId = SetTimer(dlg, 1, (UINT)g.intervalMs, nullptr);
+            if (!g.timerId) {
+                ShowError(dlg, L"Failed to resume timer.");
+                StopCalibration(dlg);
+                return;
+            }
+        }
+
+        // Keep focus on the output area so key controls work consistently.
+        if (g.output) SetFocus(g.output);
+
+        std::wstring status = L"Status: Running. ";
+        status += ModeLabel(g.mode);
+        status += L". ";
+        status += FormatCounts(g.cols, g.rows);
+        status += L" Interval: ";
+        status += std::to_wstring(g.intervalMs);
+        status += L" ms. ";
+        status += g.wholeLine ? L"Blink whole line: ON. " : L"Blink whole line: OFF (walking). ";
+        status += L"Pause: P or Enter. Stop: Esc or S.";
+        SetStatus(status);
+    }
 }
 
 static void AdvanceState(HWND dlg) {
@@ -463,7 +515,7 @@ static LRESULT CALLBACK OutputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     switch (msg) {
     case WM_GETDLGCODE:
         // We only want character keys while running so S works.
-        return g.running ? DLGC_WANTCHARS : 0;
+        return g.running ? (DLGC_WANTCHARS | DLGC_WANTMESSAGE) : 0;
 
     case WM_LBUTTONDOWN:
         SetFocus(hwnd);
@@ -479,8 +531,15 @@ static LRESULT CALLBACK OutputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_CHAR:
         if (g.running) {
             wchar_t ch = (wchar_t)wParam;
+
             if (ch == L's' || ch == L'S') {
                 PostMessageW(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(IDC_STOP, 0), 0);
+                return 0;
+            }
+
+            // Pause/resume (toggle)
+            if (ch == L'p' || ch == L'P' || ch == L'\r') {
+                TogglePause(GetParent(hwnd));
                 return 0;
             }
         }
@@ -533,6 +592,13 @@ static void ReplaceOutputEditWithStatic(HWND dlg) {
 static void CreateWholeLineCheckbox(HWND dlg) {
     if (g.chkWholeLine) return;
 
+    // If the checkbox exists in the dialog resource, use it (don't create a duplicate).
+    HWND existing = GetDlgItem(dlg, IDC_WHOLELINE);
+    if (existing) {
+        g.chkWholeLine = existing;
+        return;
+    }
+
     HWND loop = GetDlgItem(dlg, IDC_LOOP);
 
     // Fallback position if we can't locate the Loop checkbox.
@@ -556,7 +622,7 @@ static void CreateWholeLineCheckbox(HWND dlg) {
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
         x, y, w, h,
         dlg,
-        (HMENU)2200, // dynamic ID; not in resource.h
+        (HMENU)IDC_WHOLELINE, // matches resource.h if present
         GetModuleHandleW(nullptr),
         nullptr
     );
@@ -579,6 +645,7 @@ static void StartCalibration(HWND dlg) {
     g.phaseOn = true;
     g.stepIndex = 0;
     g.dashSubStep = 0;
+    g.paused = false;
 
     // Focus output so braille tends to follow it.
     if (g.output) SetFocus(g.output);
@@ -606,7 +673,7 @@ static void StartCalibration(HWND dlg) {
     status += L" ms. ";
 
     status += g.wholeLine ? L"Blink whole line: ON. " : L"Blink whole line: OFF (walking). ";
-    status += L"Stop: Esc or S.";
+    status += L"Pause: P or Enter. Stop: Esc or S.";
 
     SetStatus(status);
 }
@@ -654,12 +721,13 @@ INT_PTR CALLBACK MainDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         g.totalCells = g.cols * g.rows;
         SetOutputText(BuildBlankLine());
 
-        SetStatus(L"Status: Idle. Tip: set translation to 8-dot Computer Braille. While running: Esc or S stops.");
+        SetStatus(L"Status: Idle. Tip: set translation to 8-dot Computer Braille. While running: P or Enter pauses; Esc or S stops.");
         return TRUE;
     }
 
     case WM_TIMER:
         if (wParam == 1 && g.running) {
+            if (g.paused) return TRUE;
             SetOutputText(BuildLineForTick());
             AdvanceState(dlg);
             return TRUE;
