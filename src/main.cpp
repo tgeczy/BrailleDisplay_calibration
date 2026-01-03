@@ -618,7 +618,7 @@ INT_PTR CALLBACK MainDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         g.status = GetDlgItem(dlg, IDC_STATUS);
 
         ReplaceOutputEditWithStatic(dlg);
-
+    CreateWholeLineCheckbox(dlg); 
         // Defaults
         SetDlgItemInt(dlg, IDC_COLUMNS, g.cols, FALSE);
         SetDlgItemInt(dlg, IDC_ROWS, g.rows, FALSE);
